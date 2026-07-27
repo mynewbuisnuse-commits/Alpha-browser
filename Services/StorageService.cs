@@ -50,6 +50,12 @@ public class StorageService
         catch { }
     }
 
+    public void Reset()
+    {
+        Settings = new AppSettings();
+        Save();
+    }
+
     public static string EncryptPassword(string plainText)
     {
         if (string.IsNullOrEmpty(plainText)) return "";

@@ -383,9 +383,8 @@ public partial class MainPage : ContentPage
             case "Clear Cache":
                 try
                 {
-                    var context = Android.App.Application.Context;
-                    if (context != null)
-                        global::Android.Webkit.WebView.ClearCache(true);
+                    if (_currentTab?.WebView?.Handler?.PlatformView is Android.Webkit.WebView nativeWv)
+                        nativeWv.ClearCache(true);
                 }
                 catch { }
                 await DisplayAlert("Cache", "Cache cleared.", "OK");
@@ -402,8 +401,7 @@ public partial class MainPage : ContentPage
                 if (confirm)
                 {
                     File.Delete(Path.Combine(FileSystem.AppDataDirectory, "AlphaBrowser", "settings.json"));
-                    _storage.Settings = new AppSettings();
-                    _storage.Save();
+                    _storage.Reset();
                     await DisplayAlert("Reset", "Browser has been reset. Restart the app.", "OK");
                 }
                 break;
