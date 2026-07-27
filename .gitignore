@@ -1,0 +1,13 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+
+## Visual Studio
+.vs/
+*.sln.docstates
+
+## JetBrains Rider
+.idea/
+*.sln.iml
