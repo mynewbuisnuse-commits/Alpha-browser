@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -19,36 +19,13 @@ jobs:
       - name: Install MAUI workload
         run: dotnet workload install maui
 
-      - name: Install MAUI workload
-        run: dotnet workload install maui
-
       - name: Restore NuGet packages
         run: dotnet restore AlphaBrowser.Android.csproj
 
-      - name: Build AAB
-        run: >
-          dotnet build AlphaBrowser.Android.csproj
-          -f net8.0-android
-          -c Release
-          --no-restore
-          /p:AndroidPackageFormat=aab
+      - name: Build APK
+        run: dotnet build AlphaBrowser.Android.csproj -f net8.0-android -c Release /p:AndroidPackageFormat=apk /p:AndroidSigningEnabled=false
 
-      - name: Upload AAB
-        uses: actions/upload-artifact@v4
-        with:
-          name: AlphaBrowser-AAB
-          path: bin/Release/net8.0-android/*.aab
-
-      - name: Build APK (unsigned)
-        run: >
-          dotnet build AlphaBrowser.Android.csproj
-          -f net8.0-android
-          -c Release
-          --no-restore
-          /p:AndroidPackageFormat=apk
-          /p:AndroidSigningEnabled=false
-
-      - name: Upload APK (unsigned)
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: AlphaBrowser-APK
