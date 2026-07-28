@@ -23,7 +23,7 @@ jobs:
         run: dotnet restore AlphaBrowser.Android.csproj /p:CheckEolTargetFramework=false
 
       - name: Build APK
-        run: dotnet build AlphaBrowser.Android.csproj -f net8.0-android -c Release /p:AndroidPackageFormat=apk /p:AndroidSigningEnabled=false /p:CheckEolTargetFramework=false
+        run: dotnet build AlphaBrowser.Android.csproj -f net8.0-android -c Release /p:AndroidPackageFormat=apk /p:CheckEolTargetFramework=false
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
