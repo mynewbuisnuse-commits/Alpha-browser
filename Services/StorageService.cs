@@ -15,11 +15,9 @@ public class StorageService
     {
         _root = Path.Combine(FileSystem.AppDataDirectory, "AlphaBrowser");
         Directory.CreateDirectory(_root);
+        Directory.CreateDirectory(Path.Combine(_root, "Wallpapers"));
         _settingsFile = Path.Combine(_root, "settings.json");
         Settings = Load();
-        if (string.IsNullOrWhiteSpace(Settings.DownloadFolder))
-            Settings.DownloadFolder = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
     }
 
     public string RootFolder => _root;
@@ -43,8 +41,7 @@ public class StorageService
     {
         try
         {
-            var options = new JsonSerializerOptions { WriteIndented = true };
-            var json = JsonSerializer.Serialize(Settings, options);
+            var json = JsonSerializer.Serialize(Settings, new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(_settingsFile, json);
         }
         catch { }
@@ -56,21 +53,39 @@ public class StorageService
         Save();
     }
 
+    public void AddBookmark(string title, string url)
+    {
+        Settings.Bookmarks.Insert(0, new BookmarkEntry { Title = title, Url = url, AddedAt = DateTime.Now });
+        Save();
+    }
+
+    public void AddHistory(string title, string url)
+    {
+        Settings.History.Insert(0, new HistoryEntry { Title = title, Url = url, VisitedAt = DateTime.Now });
+        if (Settings.History.Count > 500)
+            Settings.History.RemoveRange(500, Settings.History.Count - 500);
+        Save();
+    }
+
+    public void AddDownload(string fileName, string filePath, string url)
+    {
+        Settings.Downloads.Insert(0, new DownloadEntry
+        {
+            FileName = fileName, FilePath = filePath, Url = url, Date = DateTime.Now
+        });
+        Save();
+    }
+
     public static string EncryptPassword(string plainText)
     {
         if (string.IsNullOrEmpty(plainText)) return "";
-        var bytes = Encoding.UTF8.GetBytes(plainText);
-        return Convert.ToBase64String(bytes);
+        return Convert.ToBase64String(Encoding.UTF8.GetBytes(plainText));
     }
 
     public static string DecryptPassword(string encryptedBase64)
     {
         if (string.IsNullOrEmpty(encryptedBase64)) return "";
-        try
-        {
-            var bytes = Convert.FromBase64String(encryptedBase64);
-            return Encoding.UTF8.GetString(bytes);
-        }
+        try { return Encoding.UTF8.GetString(Convert.FromBase64String(encryptedBase64)); }
         catch { return ""; }
     }
 }

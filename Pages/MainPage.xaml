@@ -5,115 +5,95 @@
              Shell.NavBarIsVisible="False"
              BackgroundColor="{StaticResource BgDark}">
 
-    <Grid RowDefinitions="Auto,Auto,*,Auto">
+    <Grid x:Name="Root" RowDefinitions="Auto,Auto,*">
 
         <!-- Row 0: Toolbar -->
-        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto"
-              BackgroundColor="{StaticResource BgPanel}"
-              Padding="4,4,4,2" ColumnSpacing="4">
-
-            <!-- Back / Forward / Reload -->
-            <HorizontalStackLayout Grid.Column="0" Spacing="2">
-                <Button x:Name="BackButton" Text="◀" FontSize="16"
-                        BackgroundColor="Transparent" TextColor="{StaticResource TextPrimary}"
-                        WidthRequest="40" HeightRequest="40" Clicked="OnBackClicked"/>
-                <Button x:Name="ForwardButton" Text="▶" FontSize="16"
-                        BackgroundColor="Transparent" TextColor="{StaticResource TextPrimary}"
-                        WidthRequest="40" HeightRequest="40" Clicked="OnForwardClicked"/>
-                <Button x:Name="ReloadButton" Text="🔄" FontSize="16"
-                        BackgroundColor="Transparent" TextColor="{StaticResource TextPrimary}"
-                        WidthRequest="40" HeightRequest="40" Clicked="OnReloadClicked"/>
+        <Grid Grid.Row="0" x:Name="Toolbar" ColumnDefinitions="Auto,*,Auto"
+              Padding="2" ColumnSpacing="2" HeightRequest="46">
+            <HorizontalStackLayout Grid.Column="0" Spacing="1">
+                <Button x:Name="BackBtn" Text="&#x25C0;" FontSize="16" WidthRequest="38" HeightRequest="38"
+                        BackgroundColor="Transparent" Clicked="OnBack" CornerRadius="19"/>
+                <Button x:Name="FwdBtn" Text="&#x25B6;" FontSize="16" WidthRequest="38" HeightRequest="38"
+                        BackgroundColor="Transparent" Clicked="OnForward" CornerRadius="19"/>
+                <Button x:Name="ReloadBtn" Text="&#x21BB;" FontSize="18" WidthRequest="38" HeightRequest="38"
+                        BackgroundColor="Transparent" Clicked="OnReload" CornerRadius="19"/>
             </HorizontalStackLayout>
-
-            <!-- Address Bar -->
-            <Entry x:Name="AddressBar" Grid.Column="1"
-                   Placeholder="Search or enter URL"
-                   PlaceholderColor="{StaticResource TextMuted}"
-                   TextColor="{StaticResource TextPrimary}"
-                   BackgroundColor="{StaticResource BgElevated}"
-                   FontSize="14"
-                   VerticalOptions="Center"
-                   HeightRequest="38"
-                   Keyboard="Url"
-                   ReturnType="Go"
-                   Completed="OnAddressSubmitted"/>
-
-            <!-- Menu / Tabs -->
-            <HorizontalStackLayout Grid.Column="2" Spacing="2">
-                <Button x:Name="TabsButton" Text="📑" FontSize="16"
-                        BackgroundColor="Transparent" TextColor="{StaticResource TextPrimary}"
-                        WidthRequest="40" HeightRequest="40" Clicked="OnTabsClicked"/>
-                <Button x:Name="MenuButton" Text="⋮" FontSize="22" FontAttributes="Bold"
-                        BackgroundColor="Transparent" TextColor="{StaticResource TextPrimary}"
-                        WidthRequest="40" HeightRequest="40" Clicked="OnMenuClicked"/>
+            <Entry x:Name="AddressBar" Grid.Column="1" Placeholder="Search or enter URL"
+                   FontSize="13" VerticalOptions="Center" HeightRequest="36"
+                   Keyboard="Url" ReturnType="Go" Completed="OnAddressGo"
+                   ClearButtonVisibility="WhileEditing"/>
+            <HorizontalStackLayout Grid.Column="2" Spacing="1">
+                <Button x:Name="MenuBtn" Text="&#x22EE;" FontSize="20" WidthRequest="38" HeightRequest="38"
+                        BackgroundColor="Transparent" Clicked="OnMenu" CornerRadius="19"/>
             </HorizontalStackLayout>
         </Grid>
 
         <!-- Row 1: Tab Strip -->
-        <ScrollView Grid.Row="1" Orientation="Horizontal" HorizontalScrollBarVisibility="Never"
-                    BackgroundColor="{StaticResource BgDark}">
-            <HorizontalStackLayout x:Name="TabStrip" Spacing="2" Padding="4,2">
-                <!-- Tabs added dynamically -->
-            </HorizontalStackLayout>
+        <ScrollView Grid.Row="1" Orientation="Horizontal" HorizontalScrollBarVisibility="Never" HeightRequest="36">
+            <HorizontalStackLayout x:Name="TabStrip" Spacing="2" Padding="4,0"/>
         </ScrollView>
 
-        <!-- Row 2: WebView Content -->
-        <Grid Grid.Row="2" x:Name="ContentArea">
-            <!-- WebViews added dynamically -->
-            <Label x:Name="LoadingLabel" Text="Loading..." TextColor="{StaticResource TextMuted}"
-                   FontSize="18" HorizontalOptions="Center" VerticalOptions="Center"
-                   IsVisible="False"/>
+        <!-- Row 2: Content -->
+        <Grid Grid.Row="2" x:Name="ContentGrid">
+            <!-- WebView area (hidden when start page shown) -->
+            <Grid x:Name="WebViewArea" IsVisible="False"/>
+
+            <!-- START PAGE -->
+            <Grid x:Name="StartPage" IsVisible="True" Padding="16" RowDefinitions="Auto,*,Auto">
+                <Grid.GestureRecognizers>
+                    <TapGestureRecognizer Tapped="OnStartPageTap"/>
+                </Grid.GestureRecognizers>
+
+                <!-- Wallpaper background -->
+                <BoxView x:Name="WallpaperBg" ZIndex="0"/>
+
+                <!-- Weather -->
+                <VerticalStackLayout ZIndex="1" HorizontalOptions="End" VerticalOptions="Start" Padding="8">
+                    <Label x:Name="WeatherIcon" FontSize="28" HorizontalOptions="End"/>
+                    <Label x:Name="WeatherTemp" FontSize="14" HorizontalOptions="End"/>
+                    <Label x:Name="WeatherCity" FontSize="11" HorizontalOptions="End"/>
+                </VerticalStackLayout>
+
+                <!-- Center: Clock + Search -->
+                <VerticalStackLayout Grid.Row="1" ZIndex="1" Spacing="16" VerticalOptions="Center"
+                                     HorizontalOptions="Center" WidthRequest="340">
+                    <Label x:Name="ClockLabel" FontSize="48" HorizontalOptions="Center" FontAttributes="Bold"/>
+                    <Label x:Name="DateLabel" FontSize="16" HorizontalOptions="Center" Opacity="0.7"/>
+                    <Entry x:Name="StartSearch" Placeholder="Search Google or type URL"
+                           FontSize="15" HeightRequest="44" ReturnType="Go"
+                           Completed="OnStartSearchGo"
+                           BackgroundColor="#33000000" TextColor="White"
+                           PlaceholderColor="#AAFFFFFF"/>
+                </VerticalStackLayout>
+
+                <!-- Pinned Sites -->
+                <CollectionView Grid.Row="2" ZIndex="1" x:Name="PinnedGrid"
+                                ItemsLayout="HorizontalList" HeightRequest="80" VerticalOptions="End">
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate>
+                            <VerticalStackLayout Padding="8,0" HorizontalOptions="Center">
+                                <Border StrokeShape="RoundRectangle 20" StrokeThickness="0"
+                                        BackgroundColor="#33000000" WidthRequest="40" HeightRequest="40"
+                                        HorizontalOptions="Center">
+                                    <Label Text="{Binding Initial}" FontSize="18" TextColor="White"
+                                           HorizontalOptions="Center" VerticalOptions="Center"/>
+                                </Border>
+                                <Label Text="{Binding Title}" FontSize="10" TextColor="White"
+                                       HorizontalOptions="Center" MaxLines="1" LineBreakMode="TailTruncation"
+                                       WidthRequest="56"/>
+                            </VerticalStackLayout>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
+            </Grid>
+
+            <!-- Side overlay panel -->
+            <Border x:Name="SidePanel" IsVisible="False" ZIndex="10" HorizontalOptions="End"
+                    WidthRequest="320" StrokeThickness="0" Padding="12">
+                <ScrollView>
+                    <VerticalStackLayout x:Name="SideContent" Spacing="8"/>
+                </ScrollView>
+            </Border>
         </Grid>
-
-        <!-- Row 3: Bottom Navigation Bar -->
-        <Grid Grid.Row="3" BackgroundColor="{StaticResource BgPanel}"
-              ColumnDefinitions="*,*,*,*,*" HeightRequest="48" Padding="4,0">
-
-            <VerticalStackLayout Grid.Column="0" HorizontalOptions="Center" VerticalOptions="Center"
-                                 Spacing="0">
-                <Button Text="🏠" FontSize="18" BackgroundColor="Transparent"
-                        TextColor="{StaticResource TextMuted}" WidthRequest="44" HeightRequest="32"
-                        Clicked="OnHomeClicked"/>
-                <Label Text="Home" FontSize="9" TextColor="{StaticResource TextMuted}"
-                       HorizontalOptions="Center"/>
-            </VerticalStackLayout>
-
-            <VerticalStackLayout Grid.Column="1" HorizontalOptions="Center" VerticalOptions="Center"
-                                 Spacing="0">
-                <Button Text="⭐" FontSize="18" BackgroundColor="Transparent"
-                        TextColor="{StaticResource TextMuted}" WidthRequest="44" HeightRequest="32"
-                        Clicked="OnBookmarksClicked"/>
-                <Label Text="Bookmarks" FontSize="9" TextColor="{StaticResource TextMuted}"
-                       HorizontalOptions="Center"/>
-            </VerticalStackLayout>
-
-            <VerticalStackLayout Grid.Column="2" HorizontalOptions="Center" VerticalOptions="Center"
-                                 Spacing="0">
-                <Button Text="🕐" FontSize="18" BackgroundColor="Transparent"
-                        TextColor="{StaticResource TextMuted}" WidthRequest="44" HeightRequest="32"
-                        Clicked="OnHistoryClicked"/>
-                <Label Text="History" FontSize="9" TextColor="{StaticResource TextMuted}"
-                       HorizontalOptions="Center"/>
-            </VerticalStackLayout>
-
-            <VerticalStackLayout Grid.Column="3" HorizontalOptions="Center" VerticalOptions="Center"
-                                 Spacing="0">
-                <Button Text="📥" FontSize="18" BackgroundColor="Transparent"
-                        TextColor="{StaticResource TextMuted}" WidthRequest="44" HeightRequest="32"
-                        Clicked="OnDownloadsClicked"/>
-                <Label Text="Downloads" FontSize="9" TextColor="{StaticResource TextMuted}"
-                       HorizontalOptions="Center"/>
-            </VerticalStackLayout>
-
-            <VerticalStackLayout Grid.Column="4" HorizontalOptions="Center" VerticalOptions="Center"
-                                 Spacing="0">
-                <Button Text="⚙" FontSize="18" BackgroundColor="Transparent"
-                        TextColor="{StaticResource TextMuted}" WidthRequest="44" HeightRequest="32"
-                        Clicked="OnSettingsClicked"/>
-                <Label Text="Settings" FontSize="9" TextColor="{StaticResource TextMuted}"
-                       HorizontalOptions="Center"/>
-            </VerticalStackLayout>
-        </Grid>
-
     </Grid>
 </ContentPage>
