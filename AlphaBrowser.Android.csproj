@@ -16,6 +16,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <MauiIcon Include="Resources\AppIcon\appicon.svg" Color="#7C5CFF" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.Maui.Controls" Version="8.0.100" />
     <PackageReference Include="HtmlAgilityPack" Version="1.11.62" />
   </ItemGroup>
