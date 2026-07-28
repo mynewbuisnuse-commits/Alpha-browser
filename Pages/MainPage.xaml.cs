@@ -10,63 +10,42 @@ public partial class MainPage : ContentPage
     private readonly List<BrowserTab> _tabs = new();
     private BrowserTab? _currentTab;
     private bool _isIncognito;
-    private IDispatcherTimer? _clockTimer;
-    private IDispatcherTimer? _weatherTimer;
+    private IDispatcherTimer? _clock;
 
     public MainPage()
     {
         InitializeComponent();
         _store = new StorageService();
         ThemeService.ThemeChanged += ApplyTheme;
-        InitStartPage();
+        ApplyTheme();
+        _clock = Dispatcher.CreateTimer();
+        _clock.Interval = TimeSpan.FromSeconds(1);
+        _clock.Tick += (s, e) => UpdateClock();
+        _clock.Start();
+        UpdateClock();
+        LoadStartData();
         AddNewTab();
     }
 
-    // ── Theme ────────────────────────────────────────────────
     private void ApplyTheme()
     {
         var t = ThemeService.Current;
         var bg = Color.FromArgb(t.BgDark);
         var panel = Color.FromArgb(t.BgPanel);
-        var elev = Color.FromArgb(t.BgElevated);
         var accent = Color.FromArgb(t.Accent);
-        var text = t.IsLight ? Colors.Black : Colors.White;
-        var muted = t.IsLight ? "#888888" : "#9A9AA6";
+        var text = Color.FromArgb(t.IsLight ? "#1A1A1A" : "#EDEDF2");
+        var muted = Color.FromArgb(t.IsLight ? "#666666" : "#9A9AA6");
 
-        Root.BackgroundColor = bg;
-        Toolbar.BackgroundColor = panel;
-        AddressBar.BackgroundColor = elev;
-        AddressBar.TextColor = text;
-        AddressBar.PlaceholderColor = Color.FromArgb(muted);
+        RootGrid.BackgroundColor = bg;
+        TitleBar.BackgroundColor = bg;
+        Toolbar.BackgroundColor = bg;
         BackBtn.TextColor = text;
         FwdBtn.TextColor = text;
         ReloadBtn.TextColor = text;
+        HomeBtn.TextColor = text;
         MenuBtn.TextColor = text;
-        ClockLabel.TextColor = text;
-        DateLabel.TextColor = text;
-        WeatherIcon.TextColor = text;
-        WeatherTemp.TextColor = text;
-        WeatherCity.TextColor = text;
-        SidePanel.BackgroundColor = panel;
-    }
-
-    // ── Start Page ───────────────────────────────────────────
-    private void InitStartPage()
-    {
-        ApplyTheme();
-        UpdateClock();
-        _clockTimer = Dispatcher.CreateTimer();
-        _clockTimer.Interval = TimeSpan.FromSeconds(1);
-        _clockTimer.Tick += (s, e) => UpdateClock();
-        _clockTimer.Start();
-
-        UpdateWeather();
-        _weatherTimer = Dispatcher.CreateTimer();
-        _weatherTimer.Interval = TimeSpan.FromMinutes(30);
-        _weatherTimer.Tick += async (s, e) => await FetchWeatherAsync();
-        _weatherTimer.Start();
-
-        LoadPinnedSites();
+        AddressBar.TextColor = text;
+        AddressBar.PlaceholderColor = muted;
     }
 
     private void UpdateClock()
@@ -76,153 +55,50 @@ public partial class MainPage : ContentPage
         DateLabel.Text = now.ToString("dddd, MMMM d");
     }
 
-    private async Task FetchWeatherAsync()
+    private async void LoadStartData()
     {
         try
         {
-            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
-            var json = await http.GetStringAsync("https://wttr.in/?format=%t|%C|%n");
-            var parts = json.Split('|');
-            if (parts.Length >= 2)
-            {
-                var isNight = parts.Length >= 3 && parts[2] == "1";
-                WeatherTemp.Text = parts[0];
-                WeatherIcon.Text = parts[1].ToLower() switch
-                {
-                    "clear" or "sunny" => isNight ? "🌙" : "☀️",
-                    "partly cloudy" => "⛅",
-                    "cloudy" or "overcast" => "☁️",
-                    "rain" or "light rain" or "moderate rain" => "🌧️",
-                    "thunderstorm" or "heavy rain" => "⛈️",
-                    "snow" or "light snow" => "❄️",
-                    "fog" or "mist" or "haze" => "🌫️",
-                    _ => "🌤️"
-                };
-            }
+            using var h = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+            var w = await h.GetStringAsync("https://wttr.in/?format=%t|%C");
+            var p = w.Split('|');
+            if (p.Length >= 2) { WeatherTemp.Text = p[0]; WeatherIcon.Text = p[1].Contains("clear") ? "☀️" : "🌤️"; }
         }
         catch { }
-    }
-
-    private async void UpdateWeather()
-    {
-        try { WeatherCity.Text = await new HttpClient().GetStringAsync("https://ipinfo.io/city"); } catch { }
-        _ = FetchWeatherAsync();
-    }
-
-    private void LoadPinnedSites()
-    {
         if (_store.Settings.PinnedSites.Count > 0)
             PinnedGrid.ItemsSource = _store.Settings.PinnedSites;
     }
 
-    private void OnStartPageTap(object? s, TappedEventArgs e)
-    {
-        // Focus search
-        StartSearch.Focus();
-    }
-
-    private async void OnStartSearchGo(object? s, EventArgs e)
-    {
-        var text = StartSearch.Text?.Trim();
-        if (string.IsNullOrEmpty(text)) return;
-        StartSearch.Text = "";
-        Navigate(ResolveQuery(text));
-        ShowWebView();
-    }
-
-    // ── Navigation ───────────────────────────────────────────
-    private string ResolveQuery(string text)
-    {
-        if (text.Contains(".") && !text.Contains(" "))
-            return text.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? text : "https://" + text;
-        return $"https://www.google.com/search?q={Uri.EscapeDataString(text)}";
-    }
+    private string Resolve(string q) => q.Contains(".") && !q.Contains(" ") ? (q.StartsWith("http") ? q : "https://" + q) : $"https://www.google.com/search?q={Uri.EscapeDataString(q)}";
 
     private void Navigate(string url, BrowserTab? tab = null)
     {
         tab ??= _currentTab;
-        if (tab == null || string.IsNullOrEmpty(url)) return;
-        tab.Url = url;
-        tab.WebView.Source = new UrlWebViewSource { Url = url };
+        if (tab == null) return;
+        tab.Url = url; tab.WebView.Source = new UrlWebViewSource { Url = url };
         AddressBar.Text = url;
     }
 
-    private void ShowWebView()
-    {
-        StartPage.IsVisible = false;
-        WebViewArea.IsVisible = true;
-    }
+    private void ShowWebView() { StartPage.IsVisible = false; WebViewArea.IsVisible = true; }
+    private void ShowStart() { StartPage.IsVisible = true; WebViewArea.IsVisible = false; AddressBar.Text = ""; }
 
-    private void ShowStartPage()
-    {
-        StartPage.IsVisible = true;
-        WebViewArea.IsVisible = false;
-        AddressBar.Text = "";
-    }
-
-    private void OnAddressGo(object? s, EventArgs e)
-    {
-        var text = AddressBar.Text?.Trim();
-        if (!string.IsNullOrEmpty(text))
-        {
-            ShowWebView();
-            Navigate(ResolveQuery(text));
-        }
-    }
-
-    private void OnBack(object? s, EventArgs e)
-    {
-        if (_currentTab?.WebView?.CanGoBack == true) _currentTab.WebView.GoBack();
-    }
-
-    private void OnForward(object? s, EventArgs e)
-    {
-        if (_currentTab?.WebView?.CanGoForward == true) _currentTab.WebView.GoForward();
-    }
-
-    private void OnReload(object? s, EventArgs e)
-    {
-        if (_currentTab?.WebView != null)
-        {
-            if (_currentTab.Url == "about:blank" || string.IsNullOrEmpty(_currentTab.Url))
-                ShowStartPage();
-            else _currentTab.WebView.Reload();
-        }
-    }
-
-    // ── Tab Management ───────────────────────────────────────
     private BrowserTab AddNewTab(string? url = null)
     {
         var wv = new WebView { IsVisible = false };
-        wv.Navigated += OnTabNavigated;
-        wv.Navigating += OnTabNavigating;
-
+        wv.Navigated += OnNav; wv.Navigating += OnNavStart;
 #if ANDROID
-        wv.HandlerChanged += (s, e) =>
-        {
-            if (wv.Handler?.PlatformView is Android.Webkit.WebView nwv)
-            {
-                nwv.Settings.JavaScriptEnabled = true;
-                nwv.Settings.DomStorageEnabled = true;
-                nwv.Settings.MixedContentMode = Android.Webkit.MixedContentHandling.AlwaysAllow;
-                nwv.Settings.BuiltInZoomControls = true;
-                nwv.Settings.DisplayZoomControls = false;
-                nwv.Settings.LoadWithOverviewMode = true;
-                nwv.Settings.UseWideViewPort = true;
+        wv.HandlerChanged += (s, e) => {
+            if (wv.Handler?.PlatformView is Android.Webkit.WebView n) {
+                n.Settings.JavaScriptEnabled = true; n.Settings.DomStorageEnabled = true;
+                n.Settings.MixedContentMode = Android.Webkit.MixedContentHandling.AlwaysAllow;
+                n.Settings.BuiltInZoomControls = true; n.Settings.DisplayZoomControls = false;
+                n.Settings.LoadWithOverviewMode = true; n.Settings.UseWideViewPort = true;
             }
         };
 #endif
-
         var tab = new BrowserTab { Title = "New Tab", Url = url ?? "about:blank", WebView = wv };
-        _tabs.Add(tab);
-        WebViewArea.Children.Add(wv);
-
-        if (!string.IsNullOrEmpty(url) && url != "about:blank")
-        {
-            wv.Source = new UrlWebViewSource { Url = url };
-            ShowWebView();
-        }
-
+        _tabs.Add(tab); WebViewArea.Children.Add(wv);
+        if (!string.IsNullOrEmpty(url) && url != "about:blank") { wv.Source = new UrlWebViewSource { Url = url }; ShowWebView(); }
         SelectTab(tab);
         return tab;
     }
@@ -230,347 +106,164 @@ public partial class MainPage : ContentPage
     private void SelectTab(BrowserTab tab)
     {
         if (_currentTab != null) { _currentTab.IsSelected = false; _currentTab.WebView.IsVisible = false; }
-        _currentTab = tab;
-        _currentTab.IsSelected = true;
-        _currentTab.WebView.IsVisible = true;
+        _currentTab = tab; _currentTab.IsSelected = true; _currentTab.WebView.IsVisible = true;
         AddressBar.Text = _currentTab.Url;
-
-        if (_currentTab.Url == "about:blank" || string.IsNullOrEmpty(_currentTab.Url))
-            ShowStartPage();
-
-        UpdateTabStrip();
-        UpdateNavButtons();
+        if (_currentTab.Url == "about:blank" || string.IsNullOrEmpty(_currentTab.Url)) ShowStart(); else ShowWebView();
+        RenderTabs(); UpdateNav();
     }
 
     private void CloseTab(BrowserTab tab)
     {
         if (_tabs.Count <= 1) return;
-        var idx = _tabs.IndexOf(tab);
-        _tabs.Remove(tab);
-        WebViewArea.Children.Remove(tab.WebView);
-        if (_currentTab == tab)
-            SelectTab(_tabs[Math.Min(idx, _tabs.Count - 1)]);
-        UpdateTabStrip();
+        var i = _tabs.IndexOf(tab); _tabs.Remove(tab); WebViewArea.Children.Remove(tab.WebView);
+        if (_currentTab == tab) SelectTab(_tabs[Math.Min(i, _tabs.Count - 1)]);
+        RenderTabs();
     }
 
-    private void UpdateTabStrip()
+    private void RenderTabs()
     {
         TabStrip.Children.Clear();
-        foreach (var tab in _tabs)
+        foreach (var t in _tabs)
         {
-            var text = tab.IsPinned ? "📌" : "";
-            text += tab.Title.Length > 10 ? tab.Title[..10] + "…" : tab.Title;
-
-            var btn = new Button
+            var isSel = t == _currentTab;
+            var lbl = new Label
             {
-                Text = text, FontSize = 11, HeightRequest = 28, CornerRadius = 6,
-                Padding = new Thickness(8, 0),
-                BackgroundColor = tab == _currentTab
-                    ? Color.FromArgb(ThemeService.Current.IsLight ? "#E0E0E0" : "#26262C")
-                    : Colors.Transparent,
-                TextColor = Color.FromArgb(ThemeService.Current.IsLight ? "#000000" : "#EDEDF2")
+                Text = (t.IsPinned ? "📌" : "") + (t.Title.Length > 10 ? t.Title[..10] + "…" : t.Title),
+                FontSize = 11, VerticalOptions = LayoutOptions.Center,
+                TextColor = Color.FromArgb("#EDEDF2")
             };
-
-            var captured = tab;
-            btn.Clicked += (s, e) => SelectTab(captured);
-
-            var frame = new Border
-            {
-                Content = btn,
-                StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 6 },
-                Stroke = Color.FromArgb("#34343C"),
-                StrokeThickness = tab == _currentTab ? 0 : 1,
-                Margin = new Thickness(1, 0)
-            };
-            TabStrip.Children.Add(frame);
+            var selBar = new BoxView { Color = Color.FromArgb("#7C5CFF"), HeightRequest = 2, IsVisible = isSel, VerticalOptions = LayoutOptions.End };
+            var c = isSel ? Color.FromArgb("#26262C") : Colors.Transparent;
+            var b = new Border { Content = new Grid { Children = { lbl, selBar } }, StrokeShape = new Microsoft.Maui.Controls.Shapes.RoundRectangle { CornerRadius = 6, }, Stroke = Color.FromArgb("#34343C"), StrokeThickness = isSel ? 0 : 1, BackgroundColor = c, Padding = new Thickness(10, 2), Margin = new Thickness(1, 0) };
+            var captured = t;
+            var tap = new TapGestureRecognizer(); tap.Tapped += (s, e) => SelectTab(captured); b.GestureRecognizers.Add(tap);
+            TabStrip.Children.Add(b);
         }
-
-        // + button
-        var addBtn = new Button { Text = "+", FontSize = 16, WidthRequest = 28, HeightRequest = 28,
-            BackgroundColor = Colors.Transparent,
-            TextColor = Color.FromArgb(ThemeService.Current.IsLight ? "#000000" : "#EDEDF2") };
-        addBtn.Clicked += (s, e) => AddNewTab();
-        TabStrip.Children.Add(addBtn);
+        var add = new Label { Text = "+", FontSize = 16, TextColor = Color.FromArgb("#EDEDF2"), VerticalOptions = LayoutOptions.Center, Margin = new Thickness(4, 0) };
+        var addTap = new TapGestureRecognizer(); addTap.Tapped += (s, e) => AddNewTab(); add.GestureRecognizers.Add(addTap);
+        TabStrip.Children.Add(add);
     }
 
-    private void UpdateNavButtons()
+    private void UpdateNav() { BackBtn.Opacity = _currentTab?.WebView?.CanGoBack == true ? 1 : 0.35; FwdBtn.Opacity = _currentTab?.WebView?.CanGoForward == true ? 1 : 0.35; }
+
+    private void OnNavStart(object? s, WebNavigatingEventArgs e) => MainThread.BeginInvokeOnMainThread(() => { if (_currentTab != null) _currentTab.Url = e.Url; AddressBar.Text = e.Url; });
+    private void OnNav(object? s, WebNavigatedEventArgs e) => MainThread.BeginInvokeOnMainThread(async () =>
     {
-        BackBtn.Opacity = _currentTab?.WebView?.CanGoBack == true ? 1.0 : 0.3;
-        FwdBtn.Opacity = _currentTab?.WebView?.CanGoForward == true ? 1.0 : 0.3;
-        BackBtn.IsEnabled = _currentTab?.WebView?.CanGoBack == true;
-        FwdBtn.IsEnabled = _currentTab?.WebView?.CanGoForward == true;
-    }
+        if (_currentTab == null || s is not WebView w) return;
+        _currentTab.Url = e.Url;
+        try { var t = await w.EvaluateJavaScriptAsync("document.title"); if (!string.IsNullOrEmpty(t)) _currentTab.Title = t; } catch { }
+        AddressBar.Text = e.Url; RenderTabs(); UpdateNav();
+        if (!string.IsNullOrEmpty(e.Url) && !e.Url.StartsWith("about:") && !_isIncognito) _store.AddHistory(_currentTab.Title, e.Url);
+        if (_store.Settings.AdBlockEnabled) try { await w.EvaluateJavaScriptAsync(AdBlockService.InjectCssScript()); } catch { }
+    });
 
-    private void OnTabNavigating(object? s, WebNavigatingEventArgs e)
-    {
-        MainThread.BeginInvokeOnMainThread(() =>
-        {
-            AddressBar.Text = e.Url;
-            if (_currentTab != null) _currentTab.Url = e.Url;
-        });
-    }
+    private void OnAddressGo(object? s, EventArgs e) { var t = AddressBar.Text?.Trim(); if (!string.IsNullOrEmpty(t)) { ShowWebView(); Navigate(Resolve(t)); } }
+    private void OnStartSearchGo(object? s, EventArgs e) { var t = StartSearch.Text?.Trim(); if (!string.IsNullOrEmpty(t)) { StartSearch.Text = ""; ShowWebView(); Navigate(Resolve(t)); } }
+    private void OnBack(object? s, EventArgs e) { if (_currentTab?.WebView?.CanGoBack == true) _currentTab.WebView.GoBack(); }
+    private void OnForward(object? s, EventArgs e) { if (_currentTab?.WebView?.CanGoForward == true) _currentTab.WebView.GoForward(); }
+    private void OnReload(object? s, EventArgs e) { if (_currentTab?.WebView != null && _currentTab.Url != "about:blank") _currentTab.WebView.Reload(); else ShowStart(); }
+    private void OnHome(object? s, EventArgs e) { ShowStart(); }
 
-    private void OnTabNavigated(object? s, WebNavigatedEventArgs e)
-    {
-        MainThread.BeginInvokeOnMainThread(async () =>
-        {
-            if (_currentTab == null || s is not WebView wv) return;
-
-            _currentTab.Url = e.Url;
-            _currentTab.IsLoading = false;
-
-            try
-            {
-                var title = await wv.EvaluateJavaScriptAsync("document.title");
-                if (!string.IsNullOrEmpty(title)) _currentTab.Title = title;
-            }
-            catch { }
-
-            AddressBar.Text = e.Url;
-            UpdateTabStrip();
-            UpdateNavButtons();
-
-            if (!string.IsNullOrEmpty(e.Url) && !e.Url.StartsWith("about:") && !e.Url.StartsWith("file://"))
-            {
-                _store.AddHistory(_currentTab.Title, e.Url);
-
-                if (_store.Settings.AdBlockEnabled)
-                {
-                    try { await wv.EvaluateJavaScriptAsync(AdBlockService.InjectCssScript()); }
-                    catch { }
-                }
-            }
-        });
-    }
-
-    // ── Menu ─────────────────────────────────────────────────
     private async void OnMenu(object? s, EventArgs e)
     {
-        var actions = new List<string>
-        {
-            "New Tab", "Bookmark This Page", "Share Page",
-            _isIncognito ? "Disable Incognito" : "Incognito Mode",
+        var a = await DisplayActionSheet("Alpha Browser", "Close", null,
+            "New Tab", "Bookmark This Page", "Share",
+            _isIncognito ? "Incognito: ON" : "Incognito: OFF",
             "Bookmarks", "History", "Downloads", "Passwords",
-            "Pinned Sites", "Profiles", "Settings", "About"
-        };
-
-        var choice = await DisplayActionSheet("Alpha Browser", "Close", null, actions.ToArray());
-        if (choice == null || choice == "Close") return;
-
-        switch (choice)
+            "Pinned Sites", "Profiles", "Themes", "Settings", "About");
+        if (a == null || a == "Close") return;
+        switch (a)
         {
             case "New Tab": AddNewTab(); break;
             case "Bookmark This Page":
-                if (_currentTab != null && !string.IsNullOrEmpty(_currentTab.Url) && _currentTab.Url != "about:blank")
-                {
-                    _store.AddBookmark(_currentTab.Title, _currentTab.Url);
-                    await DisplayAlert("Bookmark", "Page bookmarked!", "OK");
-                }
-                else await DisplayAlert("Bookmark", "No page to bookmark.", "OK");
-                break;
-
-            case "Share Page":
-                if (_currentTab != null && !string.IsNullOrEmpty(_currentTab.Url))
-                    await Share.Default.RequestAsync(new ShareTextRequest
-                    { Uri = _currentTab.Url, Title = _currentTab.Title });
-                break;
-
-            case "Incognito Mode":
-                _isIncognito = true;
-                AddNewTab("about:blank");
-                break;
-            case "Disable Incognito":
-                _isIncognito = false;
-                break;
-
+                if (_currentTab != null && !string.IsNullOrEmpty(_currentTab.Url) && _currentTab.Url != "about:blank") { _store.AddBookmark(_currentTab.Title, _currentTab.Url); await DisplayAlert("", "Bookmarked!", "OK"); }
+                else await DisplayAlert("", "No page to bookmark.", "OK"); break;
+            case "Share":
+                if (_currentTab != null && !string.IsNullOrEmpty(_currentTab.Url)) await Share.Default.RequestAsync(new ShareTextRequest { Uri = _currentTab.Url, Title = _currentTab.Title }); break;
+            case "Incognito: OFF": _isIncognito = true; AddNewTab(); break;
+            case "Incognito: ON": _isIncognito = false; await DisplayAlert("", "Incognito off", "OK"); break;
             case "Bookmarks": await ShowBookmarks(); break;
             case "History": await ShowHistory(); break;
             case "Downloads": await ShowDownloads(); break;
             case "Passwords": await ShowPasswords(); break;
-            case "Pinned Sites": await ShowPinnedManager(); break;
+            case "Pinned Sites": await ShowPinned(); break;
             case "Profiles": await ShowProfiles(); break;
+            case "Themes": await ShowThemes(); break;
             case "Settings": await ShowSettings(); break;
-            case "About":
-                await DisplayAlert("Alpha Browser",
-                    $"Alpha Browser v1.0\n\nBuilt from your 2-year WPF project\nPorted to Android via .NET MAUI\n\n© mynewbuisnuse-commits",
-                    "OK");
-                break;
+            case "About": await DisplayAlert("Alpha Browser", "Alpha Browser v1.0\nPorted from WPF", "OK"); break;
         }
     }
 
-    // ── Bookmarks ────────────────────────────────────────────
     private async Task ShowBookmarks()
     {
-        var bm = _store.Settings.Bookmarks;
-        if (bm.Count == 0) { await DisplayAlert("Bookmarks", "No bookmarks yet.", "OK"); return; }
-
-        var items = bm.Select(b => $"{b.Title} — {ShortUrl(b.Url)}").ToArray();
-        var sel = await DisplayActionSheet("Bookmarks (Delete: long-press)", "Close", null, items);
-        if (sel == null || sel == "Close") return;
-        var match = bm.FirstOrDefault(b => $"{b.Title} — {ShortUrl(b.Url)}" == sel);
-        if (match != null) { ShowWebView(); Navigate(match.Url); }
+        var b = _store.Settings.Bookmarks; if (b.Count == 0) { await DisplayAlert("", "No bookmarks.", "OK"); return; }
+        var s = await DisplayActionSheet("Bookmarks", "Close", null, b.Select(x => x.Title.Length > 40 ? x.Title[..40] + "…" : x.Title).ToArray());
+        if (s != null && s != "Close") { var m = b.FirstOrDefault(x => (x.Title.Length > 40 ? x.Title[..40] + "…" : x.Title) == s); if (m != null) { ShowWebView(); Navigate(m.Url); } }
     }
 
-    // ── History ──────────────────────────────────────────────
     private async Task ShowHistory()
     {
-        var h = _store.Settings.History;
-        if (h.Count == 0) { await DisplayAlert("History", "No history.", "OK"); return; }
-
-        var items = h.Select(e => e.Title.Length > 40 ? e.Title[..40] + "…" : e.Title).ToArray();
-        var sel = await DisplayActionSheet("History (Clear = delete all)", "Close", "Clear All", items);
-        if (sel == "Clear All") { _store.Settings.History.Clear(); _store.Save(); }
-        else if (sel != null && sel != "Close")
-        {
-            var match = h.FirstOrDefault(e => (e.Title.Length > 40 ? e.Title[..40] + "…" : e.Title) == sel);
-            if (match != null) { ShowWebView(); Navigate(match.Url); }
-        }
+        var h = _store.Settings.History; if (h.Count == 0) { await DisplayAlert("", "No history.", "OK"); return; }
+        var s = await DisplayActionSheet("History", "Close", "Clear All", h.Select(x => x.Title.Length > 40 ? x.Title[..40] + "…" : x.Title).ToArray());
+        if (s == "Clear All") { _store.Settings.History.Clear(); _store.Save(); }
+        else if (s != null && s != "Close") { var m = h.FirstOrDefault(x => (x.Title.Length > 40 ? x.Title[..40] + "…" : x.Title) == s); if (m != null) { ShowWebView(); Navigate(m.Url); } }
     }
 
-    // ── Downloads ────────────────────────────────────────────
-    private async Task ShowDownloads()
+    private Task ShowDownloads()
     {
         var d = _store.Settings.Downloads;
-        if (d.Count == 0) { await DisplayAlert("Downloads", "No downloads.", "OK"); return; }
-        var items = d.Select(x => $"{x.FileName} ({x.ProgressText})").ToArray();
-        await DisplayActionSheet("Downloads", "Close", null, items);
+        return d.Count == 0 ? DisplayAlert("", "No downloads.", "OK") : DisplayActionSheet("Downloads", "Close", null, d.Select(x => $"{x.FileName}").ToArray());
     }
 
-    // ── Passwords ────────────────────────────────────────────
-    private async Task ShowPasswords()
+    private Task ShowPasswords()
     {
-        var pw = _store.Settings.SavedPasswords;
-        if (pw.Count == 0) { await DisplayAlert("Passwords", "No saved passwords.", "OK"); return; }
-        var items = pw.Select(p => $"{p.Site}: {p.Username}").ToArray();
-        await DisplayActionSheet("Passwords", "Close", null, items);
+        var p = _store.Settings.SavedPasswords;
+        return p.Count == 0 ? DisplayAlert("", "No passwords.", "OK") : DisplayActionSheet("Passwords", "Close", null, p.Select(x => $"{x.Site}: {x.Username}").ToArray());
     }
 
-    // ── Pinned Sites ─────────────────────────────────────────
-    private async Task ShowPinnedManager()
+    private async Task ShowPinned()
     {
-        var ps = _store.Settings.PinnedSites;
-        if (_currentTab != null && !string.IsNullOrEmpty(_currentTab.Url) && _currentTab.Url != "about:blank")
-        {
-            var add = await DisplayAlert("Pinned Sites", $"Pin \"{_currentTab.Title}\"?", "Pin It", "View List");
-            if (add)
-            {
-                _store.Settings.PinnedSites.Add(new PinnedSite
-                { Title = _currentTab.Title, Url = _currentTab.Url });
-                _store.Save();
-                LoadPinnedSites();
-                await DisplayAlert("Pinned", "Site pinned!", "OK");
-                return;
-            }
-        }
-        if (ps.Count == 0) { await DisplayAlert("Pinned Sites", "No pinned sites.", "OK"); return; }
-        var items = ps.Select(p => p.Title).Append("[Clear All]").ToArray();
-        var sel = await DisplayActionSheet("Pinned Sites", "Close", null, items);
-        if (sel == "[Clear All]") { _store.Settings.PinnedSites.Clear(); _store.Save(); LoadPinnedSites(); }
-        else if (sel != null && sel != "Close")
-        {
-            var match = ps.FirstOrDefault(p => p.Title == sel);
-            if (match != null) { ShowWebView(); Navigate(match.Url); }
-        }
+        var p = _store.Settings.PinnedSites;
+        if (_currentTab != null && !string.IsNullOrEmpty(_currentTab.Url) && _currentTab.Url != "about:blank" && await DisplayAlert("Pin", $"Pin \"{_currentTab.Title}\"?", "Yes", "View List"))
+        { _store.Settings.PinnedSites.Add(new PinnedSite { Title = _currentTab.Title, Url = _currentTab.Url }); _store.Save(); PinnedGrid.ItemsSource = null; PinnedGrid.ItemsSource = _store.Settings.PinnedSites; return; }
+        if (p.Count == 0) { await DisplayAlert("", "No pinned sites.", "OK"); return; }
+        var s = await DisplayActionSheet("Pinned Sites", "Close", "Clear All", p.Select(x => x.Title).ToArray());
+        if (s == "Clear All") { _store.Settings.PinnedSites.Clear(); _store.Save(); PinnedGrid.ItemsSource = null; PinnedGrid.ItemsSource = _store.Settings.PinnedSites; }
+        else if (s != null && s != "Close") { var m = p.FirstOrDefault(x => x.Title == s); if (m != null) { ShowWebView(); Navigate(m.Url); } }
     }
 
-    // ── Profiles ─────────────────────────────────────────────
     private async Task ShowProfiles()
     {
-        var profiles = _store.Settings.Profiles;
-        if (profiles.Count == 0)
-            profiles.Add(new UserProfile { Name = "Default" });
-
-        var items = profiles.Select(p => $"{p.AvatarEmoji} {p.Name}").Append("[New Profile]").ToArray();
-        var sel = await DisplayActionSheet("Profiles", "Close", null, items);
-        if (sel == "[New Profile]")
-        {
-            var name = await DisplayPromptAsync("New Profile", "Profile name:", initialValue: "New Profile");
-            if (!string.IsNullOrEmpty(name))
-            {
-                _store.Settings.Profiles.Add(new UserProfile { Name = name });
-                _store.Save();
-            }
-        }
-        else if (sel != null && sel != "Close")
-        {
-            var match = profiles.FirstOrDefault(p => $"{p.AvatarEmoji} {p.Name}" == sel);
-            if (match != null)
-            {
-                _store.Settings.ActiveProfileId = match.Id;
-                _store.Settings.HomeUrl = match.HomeUrl;
-                _store.Settings.SearchEngine = match.SearchEngine;
-                _store.Settings.AdBlockEnabled = match.AdBlockEnabled;
-                _store.Save();
-                ThemeService.Apply(match.Theme);
-                await DisplayAlert("Profile", $"Switched to {match.Name}", "OK");
-            }
-        }
+        var p = _store.Settings.Profiles; if (p.Count == 0) p.Add(new UserProfile { Name = "Default" });
+        var s = await DisplayActionSheet("Profiles", "Close", null, p.Select(x => $"{x.AvatarEmoji} {x.Name}").Append("[New]").ToArray());
+        if (s == "[New]") { var n = await DisplayPromptAsync("", "Name:"); if (!string.IsNullOrEmpty(n)) { _store.Settings.Profiles.Add(new UserProfile { Name = n }); _store.Save(); } }
+        else if (s != null && s != "Close") { var m = p.FirstOrDefault(x => $"{x.AvatarEmoji} {x.Name}" == s); if (m != null) { _store.Settings.ActiveProfileId = m.Id; _store.Settings.HomeUrl = m.HomeUrl; _store.Settings.SearchEngine = m.SearchEngine; _store.Settings.AdBlockEnabled = m.AdBlockEnabled; _store.Save(); ThemeService.Apply(m.Theme); } }
     }
 
-    // ── Settings ─────────────────────────────────────────────
+    private async Task ShowThemes()
+    {
+        var names = ThemeService.Themes.Select(t => t.Name).ToArray();
+        var s = await DisplayActionSheet("Theme", "Cancel", null, names);
+        if (s != null && s != "Cancel") { _store.Settings.Theme = s; ThemeService.Apply(s); _store.Save(); }
+    }
+
     private async Task ShowSettings()
     {
         var s = _store.Settings;
-        var themeNames = ThemeService.Themes.Select(t => t.Name).ToArray();
-        var items = new List<string>
-        {
-            $"Home: {ShortUrl(s.HomeUrl)}",
-            $"Search: {s.SearchEngine}",
-            $"Theme: {s.Theme}",
-            $"AdBlock: {(s.AdBlockEnabled ? "ON" : "OFF")}",
-            $"Restore Tabs: {(s.RestoreTabsOnStartup ? "ON" : "OFF")}",
-            "Clear Cache",
-            "Clear History",
-            "Reset Browser"
+        var items = new[] {
+            $"Home: {ShortUrl(s.HomeUrl)}", $"Search: {s.SearchEngine}", $"AdBlock: {(s.AdBlockEnabled ? "ON" : "OFF")}",
+            $"Restore Tabs: {(s.RestoreTabsOnStartup ? "ON" : "OFF")}", "Clear Cache", "Clear History", "Reset"
         };
-
-        var sel = await DisplayActionSheet("Settings", "Close", null, items.ToArray());
-        if (sel == null || sel == "Close") return;
-
-        if (sel.StartsWith("Home:"))
-        {
-            var url = await DisplayPromptAsync("Home Page", "URL:", initialValue: s.HomeUrl);
-            if (!string.IsNullOrEmpty(url)) { s.HomeUrl = url; _store.Save(); }
-        }
-        else if (sel.StartsWith("Search:"))
-        {
-            var eng = await DisplayActionSheet("Search Engine", "Cancel", null, "Google", "Bing", "DuckDuckGo");
-            if (eng != null && eng != "Cancel") { s.SearchEngine = eng; _store.Save(); }
-        }
-        else if (sel.StartsWith("Theme:"))
-        {
-            var th = await DisplayActionSheet("Theme", "Cancel", null, themeNames);
-            if (th != null && th != "Cancel") { s.Theme = th; ThemeService.Apply(th); _store.Save(); }
-        }
-        else if (sel.StartsWith("AdBlock:")) { s.AdBlockEnabled = !s.AdBlockEnabled; _store.Save(); }
-        else if (sel.StartsWith("Restore Tabs:")) { s.RestoreTabsOnStartup = !s.RestoreTabsOnStartup; _store.Save(); }
-        else if (sel == "Clear Cache")
-        {
-            try
-            {
-                if (_currentTab?.WebView?.Handler?.PlatformView is Android.Webkit.WebView nwv)
-                    nwv.ClearCache(true);
-            }
-            catch { }
-            await DisplayAlert("Cache", "Cleared!", "OK");
-        }
-        else if (sel == "Clear History") { s.History.Clear(); _store.Save(); }
-        else if (sel == "Reset Browser")
-        {
-            if (await DisplayAlert("Reset", "Delete all data?", "Yes", "No"))
-            {
-                _store.Reset();
-                await DisplayAlert("Reset", "Browser reset. Restart app.", "OK");
-            }
-        }
-
-        await ShowSettings(); // refresh
+        var c = await DisplayActionSheet("Settings", "Close", null, items);
+        if (c == null || c == "Close") return;
+        if (c.StartsWith("Home:")) { var u = await DisplayPromptAsync("", "Home URL:", initialValue: s.HomeUrl); if (!string.IsNullOrEmpty(u)) { s.HomeUrl = u; _store.Save(); } }
+        else if (c.StartsWith("Search:")) { var e = await DisplayActionSheet("Engine", "Cancel", null, "Google", "Bing", "DuckDuckGo"); if (e != null && e != "Cancel") { s.SearchEngine = e; _store.Save(); } }
+        else if (c.StartsWith("AdBlock:")) { s.AdBlockEnabled = !s.AdBlockEnabled; _store.Save(); }
+        else if (c.StartsWith("Restore Tabs:")) { s.RestoreTabsOnStartup = !s.RestoreTabsOnStartup; _store.Save(); }
+        else if (c == "Clear Cache") { try { if (_currentTab?.WebView?.Handler?.PlatformView is Android.Webkit.WebView n) n.ClearCache(true); } catch { } await DisplayAlert("", "Cache cleared.", "OK"); }
+        else if (c == "Clear History") { s.History.Clear(); _store.Save(); }
+        else if (c == "Reset") { if (await DisplayAlert("", "Reset all data?", "Yes", "No")) { _store.Reset(); } }
     }
 
-    // ── Helpers ──────────────────────────────────────────────
-    private static string ShortUrl(string url)
-    {
-        try { var u = new Uri(url); return u.Host.TrimStart('w', '.') + u.AbsolutePath; }
-        catch { return url; }
-    }
+    private static string ShortUrl(string u) { try { var x = new Uri(u); return x.Host.TrimStart('w', '.'); } catch { return u; } }
 }
